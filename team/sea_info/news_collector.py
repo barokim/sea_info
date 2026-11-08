@@ -14,6 +14,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 from typing import Any, Callable
+from urllib.parse import urljoin
 
 from sea_info import ai_summary, scr13_store as ns
 from sea_info.dbutil import KST, parse_ts
@@ -95,6 +96,67 @@ def parse_feed(data: bytes, now: datetime | None = None) -> list[dict[str, Any]]
         items.append({"title": title[:200], "url": link, "text": strip_html(body), "published_at": published.isoformat()})
     return items
 
+_LI = re.compile(r"(?is)<li\b[^>]*>(.*?)</li>")
+_VIEW = re.compile(r"""(?is)<a\b[^>]*href=["']([^"']*articleView\.html\?idxno=\d+[^"']*)["'][^>]*>(.*?)</a>""")
+_SUMMARY = re.compile(r"""(?is)<p\b[^>]*class=["'][^"']*(?:lead|summary)[^"']*["'][^>]*>(.*?)</p>""")
+_DATE_FULL = re.compile(r"(\d{4})[.\-](\d{2})[.\-](\d{2})\s+(\d{2}):(\d{2})")
+_DATE_SHORT = re.compile(r"(?<![\d.\-])(\d{2})-(\d{2})\s+(\d{2}):(\d{2})")
+
+
+def is_html_list(data: bytes) -> bool:
+    return b"<html" in data[:4096].lower() or b"<!doctype html" in data[:4096].lower()
+
+
+def _list_date(block: str, now: datetime) -> datetime:
+    text = strip_html(block)
+    m = _DATE_FULL.search(text)
+    try:
+        if m:
+            y, mo, d, h, mi = map(int, m.groups())
+            return datetime(y, mo, d, h, mi, tzinfo=KST)
+        m = _DATE_SHORT.search(text)
+        if m:
+            mo, d, h, mi = map(int, m.groups())
+            dt = datetime(now.year, mo, d, h, mi, tzinfo=KST)
+            return dt.replace(year=now.year - 1) if dt > now + timedelta(days=1) else dt  # 연도 없는 날짜
+    except ValueError:
+        pass
+    return now
+
+
+def parse_article_list(data: bytes, base_url: str, now: datetime | None = None) -> list[dict[str, Any]]:
+    """인터넷신문 솔루션의 '기사목록' 화면(articleList.html)에서 기사 제목·링크·요약·시각을 읽는다.
+    RSS가 없는 구역(소분류)용. 제목은 h2 안의 링크, 요약은 lead/summary 문단이다."""
+    now = now or datetime.now(KST)
+    page = data.decode("utf-8", errors="replace")
+    items, seen = [], set()
+    for block in _LI.findall(page):
+        links = _VIEW.findall(block)
+        if not links:
+            continue
+        href = links[0][0]
+        title = ""
+        h2 = re.search(r"(?is)<h2\b[^>]*>(.*?)</h2>", block)
+        if h2:
+            title = strip_html(h2.group(1))
+        if not title:
+            title = next((strip_html(t) for _, t in links if strip_html(t)), "")
+        url = urljoin(base_url, html.unescape(href))
+        if not title or url in seen or not url.startswith(("http://", "https://")):
+            continue
+        seen.add(url)
+        m = _SUMMARY.search(block)
+        items.append({"title": title[:200], "url": url, "text": strip_html(m.group(1)) if m else "",
+                      "published_at": _list_date(block, now).isoformat()})
+    if not items:
+        raise FeedError("기사 목록을 찾지 못했습니다(화면 구조가 바뀌었을 수 있습니다).")
+    return items[:MAX_ITEMS_PER_SOURCE]
+
+
+def parse_source(data: bytes, url: str, now: datetime | None = None) -> list[dict[str, Any]]:
+    """RSS/Atom이면 피드로, 기사목록 웹페이지면 목록으로 읽는다."""
+    return parse_article_list(data, url, now) if is_html_list(data) else parse_feed(data, now)
+
 
 def _summarizer_from_settings() -> Callable[[str, str], dict[str, Any]]:
     """config의 ai.provider(mock|gemini)와 환경변수 GEMINI_API_KEY/GEMINI_MODEL을 따른다."""
@@ -112,7 +174,7 @@ def collect_source(source: dict[str, Any], *, trigger: str = "schedule", fetch: 
     summarize = summarize or _summarizer_from_settings()
     run_id = ns.start_run(source["id"], trigger, now, path)
     try:
-        items = parse_feed(fetch(source["feed_url"]), now)
+        items = parse_source(fetch(source["feed_url"]), source["feed_url"], now)
         prepared = []
         for it in items:
             s = summarize(it["title"], it["text"])

@@ -210,3 +210,46 @@ def test_기간_필터는_보이는_기사만_줄이고_데이터는_지우지_�
     assert week <= month <= quarter <= all_total == 8
     assert week < all_total
     assert ns.list_articles(within_days=None, path=ndb)[1] == all_total
+
+
+HDHY_LIST = """<html><body><ul>
+<li><a href="/news/articleView.html?idxno=35642" class="thumb"><img src="x.jpg"></a>
+<h2 class="titles"><a href="/news/articleView.html?idxno=35642">“동해안 참다랑어 제값 받으려면 냉동 인프라부터 갖춰야”</a></h2>
+<span class="dated">2026.11.04 10:28</span>
+<p class="lead"><a href="/news/articleView.html?idxno=35642">[현대해양] 동해안에서 참다랑어 어획량이 크게 늘고 있다.</a></p></li>
+<li><h2 class="titles"><a href="/news/articleView.html?idxno=35641">두 번째 기사</a></h2><span class="dated">2026.11.03 09:00</span></li>
+<li><a href="/other.html">관계없는 메뉴</a></li></ul></body></html>""".encode()
+
+PENGUIN_LIST = """<!DOCTYPE html><html><body><ul>
+<li class="altlist-webzine-item"><div><h2 class="altlist-subject">
+<a href="https://www.newspenguin.com/news/articleView.html?idxno=22392"> 뱀도 잡는 '물장군' 멸종위기 </a></h2>
+<p class="altlist-summary"> 얼마나 당당하기에 '물장군'일까. </p>
+<div class="altlist-info"><div class="altlist-info-item">이한 기자</div><div class="altlist-info-item">11-04 16:48</div></div></div></li>
+</ul></body></html>""".encode()
+
+
+def test_기사목록_웹페이지_읽기_현대해양():
+    items = nc.parse_article_list(HDHY_LIST, "https://www.hdhy.co.kr/news/articleList.html?sc_sub_section_code=S2N9", NOW)
+    assert [i["url"] for i in items] == ["https://www.hdhy.co.kr/news/articleView.html?idxno=35642",
+                                         "https://www.hdhy.co.kr/news/articleView.html?idxno=35641"]
+    assert items[0]["title"].startswith("“동해안 참다랑어") and "[현대해양]" in items[0]["text"]
+    assert items[0]["published_at"].startswith("2026-11-04T10:28")
+
+
+def test_기사목록_웹페이지_읽기_뉴스펭귄_연도없는_날짜():
+    items = nc.parse_article_list(PENGUIN_LIST, "https://www.newspenguin.com/news/articleList.html", NOW)
+    assert len(items) == 1 and items[0]["title"] == "뱀도 잡는 '물장군' 멸종위기"
+    assert items[0]["text"].startswith("얼마나 당당하기에") and items[0]["published_at"].startswith("2026-11-04T16:48")
+
+
+def test_기사목록_구조가_바뀌면_실패로_기록(cdb):
+    with pytest.raises(nc.FeedError):
+        nc.parse_source("<html><body><p>빈 페이지</p></body></html>".encode(), "https://x.test/list", NOW)
+    assert nc.parse_source(RSS, "https://x.test/feed", NOW)[0]["title"].startswith("해양수산부")
+
+
+def test_기본_출처에_새_매체_포함(ndb):
+    names = {s["name"]: s for s in ns.list_sources(ndb)}
+    assert "articleList.html?sc_sub_section_code=S2N9" in names["현대해양(연근해 어업)"]["feed_url"]
+    assert "S2N122" in names["뉴스펭귄(우리고장 멸종위기종)"]["feed_url"]
+    assert not any(s["enabled"] for s in names.values() if "RSS 중단" in s["name"])

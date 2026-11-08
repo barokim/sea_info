@@ -24,6 +24,12 @@ SOURCE_KINDS = ("공공기관", "매체", "샘플")
 DEFAULT_SOURCES = [
     {"name": "한국수산경제(전체기사)", "kind": "매체", "feed_url": "http://www.fisheco.com/rss/allArticle.xml",
      "enabled": 1, "terms_verified": 0},
+    {"name": "현대해양(연근해 어업)", "kind": "매체",
+     "feed_url": "https://www.hdhy.co.kr/news/articleList.html?sc_sub_section_code=S2N9&view_type=sm",
+     "enabled": 1, "terms_verified": 0},
+    {"name": "뉴스펭귄(우리고장 멸종위기종)", "kind": "매체",
+     "feed_url": "https://www.newspenguin.com/news/articleList.html?sc_sub_section_code=S2N122&view_type=sm",
+     "enabled": 1, "terms_verified": 0},
     {"name": "해양수산부 보도자료(정책브리핑·RSS 중단)", "kind": "공공기관", "feed_url": "https://www.korea.kr/rss/dept_mof.xml",
      "enabled": 0, "terms_verified": 1},
     {"name": "Sea-Info 편집팀(샘플)", "kind": "샘플", "feed_url": "", "enabled": 0, "terms_verified": 1},
@@ -118,6 +124,7 @@ def ensure_schema(path: str | None = None, now: datetime | None = None) -> None:
         for src in DEFAULT_SOURCES:
             con.execute("INSERT OR IGNORE INTO news_sources(name,kind,feed_url,enabled,terms_verified) "
                         "VALUES(:name,:kind,:feed_url,:enabled,:terms_verified)", src)
+        con.execute("UPDATE news_sources SET enabled=0 WHERE feed_url='https://www.korea.kr/rss/dept_mof.xml'")  # RSS 중단(2026-07-01)
         if con.execute("SELECT COUNT(*) FROM news_articles").fetchone()[0] == 0:
             sample_id = con.execute("SELECT id FROM news_sources WHERE kind='샘플'").fetchone()[0]
             base = now or datetime.now(KST)
