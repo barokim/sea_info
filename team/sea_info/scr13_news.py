@@ -28,6 +28,10 @@ def _viewer_key(user: str) -> str:
     return ns.make_viewer_key(user, hint)
 
 
+PERIODS = {"1주": 7, "1개월": 30, "3개월": 90, "전체": None}
+DEFAULT_PERIOD = "3개월"
+
+
 def _source_line(a: dict[str, Any]) -> str:
     return f"출처 {a['source_name']} · 발행 {format_ts(a['published_at'])[:10]} · 조회 {a['view_count']:,}"
 
@@ -101,18 +105,21 @@ def _render_list() -> None:
     st.subheader("전체 소식")
     sources = [s for s in ns.list_sources()]
     names = {0: "전체 출처", **{s["id"]: s["name"] for s in sources}}
-    f1, f2 = st.columns([3, 2])
+    f1, f2, f3 = st.columns([3, 2, 2])
     search = f1.text_input("제목·요약 검색", key="news_search")
     source_id = f2.selectbox("출처", list(names), format_func=lambda i: names[i], key="news_source")
+    period = f3.selectbox("기간", list(PERIODS), index=list(PERIODS).index(DEFAULT_PERIOD), key="news_period")
+    days = PERIODS[period]
     per_page = ns.get_settings()["news_per_page"]
-    items, total = ns.list_articles(search, source_id or None, st.session_state.get("news_page", 1), per_page)
+    items, total = ns.list_articles(search, source_id or None, st.session_state.get("news_page", 1), per_page,
+                                    within_days=days)
     pages = max(1, math.ceil(total / per_page))
     page = min(st.session_state.get("news_page", 1), pages)
     if page != st.session_state.get("news_page", 1):
         st.session_state["news_page"] = page
-        items, total = ns.list_articles(search, source_id or None, page, per_page)
+        items, total = ns.list_articles(search, source_id or None, page, per_page, within_days=days)
     if not items:
-        st.info("조건에 맞는 소식이 없습니다.")
+        st.info("조건에 맞는 소식이 없습니다." + ("" if days is None else " 기간을 넓혀 보세요."))
     for a in items:
         with st.container(border=True):
             st.markdown(f"**{a['title']}**")

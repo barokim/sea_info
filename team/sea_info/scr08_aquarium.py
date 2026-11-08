@@ -5,9 +5,12 @@ SCR-09 담당자가 `sea_info/scr09_dex_detail.py`에 `render_species_detail(spe
 """
 from __future__ import annotations
 
+import base64
 import importlib
+import io
 
 import streamlit as st
+from PIL import Image
 
 from sea_info import bootstrap, scr06_store, scr08_store as aq, store
 from sea_info.dbutil import format_ts
@@ -33,7 +36,7 @@ def render() -> None:
         return
 
     repaired = aq.sync_user(user)
-    if repaired["created"] or repaired["parents_restored"]:
+    if role == "admin" and (repaired["created"] or repaired["parents_restored"]):
         st.info(f"어긋난 도감 기록 {repaired['created'] + repaired['parents_restored']}건을 복구했습니다.")
 
     current = st.session_state.get("aquarium_species")
@@ -46,14 +49,107 @@ def render() -> None:
     _render_list(user)
 
 
+def _thumb(blob: bytes | None) -> str | None:
+    """표에 넣을 작은 사진(data URI). 읽을 수 없는 사진은 비운다."""
+    if not blob:
+        return None
+    try:
+        img = Image.open(io.BytesIO(blob))
+        img.thumbnail((96, 96))
+        buf = io.BytesIO()
+        img.convert("RGB").save(buf, "JPEG", quality=70)
+    except Exception:  # noqa: BLE001 - 손상된 사진 하나가 화면 전체를 막지 않게 한다
+        return None
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def _placeholder() -> str:
+    """사진이 없는 행에 넣는 회색 칸."""
+    buf = io.BytesIO()
+    Image.new("RGB", (96, 96), (226, 232, 240)).save(buf, "JPEG", quality=60)
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def _public_name(user: str) -> str:
+    """표에는 이메일 앞부분만 보인다(이메일 전체를 화면에 드러내지 않는다)."""
+    return user.split("@", 1)[0]
+
+
+def _render_tank(user: str) -> None:
+    t = aq.tank_status(user)
+    with st.container(border=True):
+        left, right = st.columns([3, 2])
+        with left:
+            st.markdown("##### 🫧 내 어항")
+            slots = t["fish"] + ["⚪"] * t["to_next"] if t["current"] else ["⚪"] * t["size"]
+            st.markdown(f"<div style='font-size:2rem;letter-spacing:.3rem'>{''.join(slots)}</div>",
+                        unsafe_allow_html=True)
+            st.caption(f"관찰 기록 {t['size']}건이 모이면 어항이 가득 찹니다. 지금 {t['current']}/{t['size']}건 · "
+                       f"{t['to_next']}건 더 모으면 새 어항이 열립니다.")
+        with right:
+            st.markdown("##### 어항을 먹은 불가사리")
+            if t["completed"]:
+                st.markdown(f"<div style='font-size:1.8rem'>{'⭐' * min(t['completed'], 12)}</div>",
+                            unsafe_allow_html=True)
+                st.caption(f"가득 찬 어항 {t['completed']}개 · 관찰 기록은 그대로 남습니다.")
+            else:
+                st.caption("아직 가득 찬 어항이 없습니다. 첫 어항을 채워 보세요.")
+
+
+def _render_table(user: str, search: str) -> None:
+    records = aq.list_all_records(user, search)
+    if not records:
+        return
+    shown = records[:100]
+    blank = _placeholder()
+    frame = [{"사진": (_thumb(r["photo_blob"]) if r["has_photo"] else None) or blank,
+              "이름": f"{r['emoji']} {r['species']}", "사용자": _public_name(user),
+              "관찰됨": format_ts(r["observed_at"])[:10], "장소": r["region"],
+              "업로드 날짜": format_ts(r["added_at"])[:10]} for r in shown]
+    event = st.dataframe(
+        frame, hide_index=True, width="stretch", on_select="rerun", selection_mode="single-row",
+        key="aq_table", row_height=56, height=min(640, 40 + 56 * len(frame)),
+        column_config={"사진": st.column_config.ImageColumn("사진", width="small")})
+    if len(records) > len(shown):
+        st.caption(f"최신 {len(shown)}건만 보여 줍니다. 이름 검색으로 좁혀 보세요.")
+    rows = event.selection.rows if event and event.selection else []
+    if rows:
+        picked = shown[rows[0]]
+        if st.button(f"{picked['emoji']} {picked['species']} 도감 상세 보기 · SCR-09", key="aq_table_open"):
+            st.session_state["aquarium_species"] = picked["species"]
+            st.rerun()
+    else:
+        st.caption("행을 선택하면 그 생물의 도감 상세로 이동할 수 있습니다.")
+
+
+def _render_cards(items: list[dict]) -> None:
+    cols = st.columns(3)
+    for i, item in enumerate(items):
+        with cols[i % 3], st.container(border=True):
+            st.markdown(f"### {item['emoji']} {item['species']}")
+            st.markdown(":green[도감 공개: 다른 사용자에게 공개]" if item["is_public"]
+                        else ":gray[도감 공개: 나만 보기]")
+            st.caption(f"관찰 {item['record_count']}건 · 최근 {format_ts(item['last_observed'])[:10]}")
+            if item["is_unidentified"]:
+                st.caption("이름을 확인하면 다른 생물로 옮길 수 있습니다.")
+            st.caption(f"공개 게시물 {item['public_posts']}건 · 공개 사진 {item['public_photos']}건"
+                       + (f" · 삭제된 글 {item['deleted_posts']}건" if item["deleted_posts"] else ""))
+            if st.button("도감 상세 · SCR-09", key=f"aq_open_{item['species']}"):
+                st.session_state["aquarium_species"] = item["species"]
+                st.rerun()
+
+
 def _render_list(user: str) -> None:
     summary = aq.summary(user)
     a, b, c = st.columns(3)
-    a.metric("수집한 생물", f"{summary['collected_species']} / {summary['master_species']}종")
+    a.metric("수집한 생물", f"{summary['collected_species']}종")
     b.metric("관찰 기록", f"{summary['total_records']}건")
     c.metric("이름 확인 필요", f"{summary['unidentified_records']}건")
     if summary["master_species"]:
         st.progress(min(1.0, summary["collected_species"] / summary["master_species"]))
+        st.caption(f"도감에 등록된 {summary['master_species']}종 중 {summary['collected_species']}종을 만났습니다.")
+
+    _render_tank(user)
 
     search = st.text_input("생물 이름 검색", key="aq_search", placeholder="예: 불가사리")
     items = aq.list_aquarium(user, search)
@@ -65,19 +161,11 @@ def _render_list(user: str) -> None:
             l, r = st.columns(2)
             l.page_link("pages/explore.py", label="사진으로 생물 알아보기", icon="🔎")
             r.page_link("pages/community.py", label="관찰 게시물 쓰기", icon="📝")
-    cols = st.columns(3)
-    for i, item in enumerate(items):
-        with cols[i % 3], st.container(border=True):
-            st.markdown(f"### {item['emoji']} {item['species']}")
-            st.markdown(":green[공개]" if item["is_public"] else ":gray[비공개]")
-            st.caption(f"관찰 {item['record_count']}건 · 최근 {format_ts(item['last_observed'])[:10]}")
-            if item["is_unidentified"]:
-                st.caption("이름을 확인하면 다른 생물로 옮길 수 있습니다.")
-            st.caption(f"공개 게시물 {item['public_posts']}건 · 공개 사진 {item['public_photos']}건"
-                       + (f" · 삭제된 글 {item['deleted_posts']}건" if item["deleted_posts"] else ""))
-            if st.button("도감 상세 · SCR-09", key=f"aq_open_{item['species']}"):
-                st.session_state["aquarium_species"] = item["species"]
-                st.rerun()
+    view = st.radio("보기", ["표", "카드"], horizontal=True, key="aq_view", label_visibility="collapsed")
+    if view == "표":
+        _render_table(user, search)
+    else:
+        _render_cards(items)
 
     master = aq.species_master()
     owned = {i["species"] for i in aq.list_aquarium(user)}

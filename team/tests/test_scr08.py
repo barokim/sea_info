@@ -120,3 +120,25 @@ def test_사진_공개_철회는_사진을_지우지_않고_본인만_보이게(
     assert p["photo_blob"] == b"img" and p["photo_public_consent"] == 0
     assert scr06_store.photo_visible(p, "alice", "member") and not scr06_store.photo_visible(p, "bob", "member")
     assert aq.make_photos_private("alice", "문어", dbp) == 0  # 두 번째는 바꿀 게 없음
+
+
+def test_어항은_5건마다_가득_차고_기록은_지우지_않는다(dbp):
+    assert aq.tank_status("zed", path=dbp)["completed"] == 0
+    for i in range(7):
+        make_post(dbp, "zed", "불가사리" if i % 2 else "문어", title=f"글{i}")
+    t = aq.tank_status("zed", path=dbp)
+    assert (t["total"], t["completed"], t["current"], t["to_next"]) == (7, 1, 2, 3)
+    assert len(t["fish"]) == 2
+    assert len(aq.list_all_records("zed", path=dbp)) == 7  # 어항이 가득 차도 기록은 그대로
+
+
+def test_표_보기_목록은_이름검색과_삭제된_글_사진_제외(dbp):
+    pid = make_post(dbp, "yan", "불가사리", photo=b"x", public_photo=True)
+    make_post(dbp, "yan", "문어")
+    recs = aq.list_all_records("yan", path=dbp)
+    assert {r["species"] for r in recs} == {"불가사리", "문어"}
+    assert [r["species"] for r in aq.list_all_records("yan", "문어", path=dbp)] == ["문어"]
+    assert next(r for r in recs if r["species"] == "불가사리")["has_photo"] is True
+    scr06_store.delete_post(pid, "yan", path=dbp)
+    after = next(r for r in aq.list_all_records("yan", path=dbp) if r["species"] == "불가사리")
+    assert after["post_deleted"] == 1 and after["has_photo"] is False

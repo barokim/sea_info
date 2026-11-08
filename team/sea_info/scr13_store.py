@@ -186,9 +186,14 @@ def add_source(name: str, kind: str, feed_url: str, is_admin: bool, terms_verifi
 
 # ------------------------------------------------------------------ 기사 조회
 def list_articles(search: str = "", source_id: int | None = None, page: int = 1, per_page: int | None = None,
-                  include_hidden: bool = False, path: str | None = None) -> tuple[list[dict[str, Any]], int]:
+                  include_hidden: bool = False, within_days: int | None = None,
+                  now: datetime | None = None, path: str | None = None) -> tuple[list[dict[str, Any]], int]:
+    """기사 목록(최신순). `within_days`가 있으면 그 기간에 발행된 기사만 보인다(데이터는 지우지 않는다)."""
     per_page = per_page or get_settings(path)["news_per_page"]
     where, params = [], []
+    if within_days:
+        where.append("a.published_at>=?")
+        params.append(((now or datetime.now(KST)) - timedelta(days=within_days)).isoformat())
     if not include_hidden:
         where.append("a.is_hidden=0")
     if source_id:

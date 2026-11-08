@@ -261,6 +261,50 @@ def list_records(user_id: str, species: str, path: str | None = None) -> list[di
     return [dict(r) for r in rows]
 
 
+TANK_SIZE = 5  # 어항 한 개를 채우는 관찰 기록 수(건수 기준)
+
+
+def list_all_records(user_id: str, search: str = "", path: str | None = None) -> list[dict[str, Any]]:
+    """모든 관찰 기록(표 보기용). 최신순. 사진은 본인 기록이므로 동의 여부와 관계없이 포함한다."""
+    needle = (search or "").strip().casefold()
+    with _db(path) as con:
+        rows = con.execute(
+            """
+            SELECT r.id AS record_id, r.species, r.observation_id, r.post_deleted, r.observed_at, r.added_at,
+                   COALESCE(o.title, r.title_snapshot) AS title,
+                   COALESCE(o.region, r.region_snapshot) AS region,
+                   o.photo_blob AS photo_blob
+            FROM aquarium_records r LEFT JOIN observations o ON o.id = r.observation_id
+            WHERE r.user_id=? AND r.status='active'
+            ORDER BY r.observed_at DESC, r.id DESC
+            """, (user_id,)).fetchall()
+    master = species_master(path)
+    out = []
+    for r in rows:
+        if needle and needle not in r["species"].casefold():
+            continue
+        d = dict(r)
+        d["emoji"] = species_info(r["species"], master)["emoji"]
+        d["has_photo"] = bool(r["photo_blob"]) and not r["post_deleted"]
+        out.append(d)
+    return out
+
+
+def tank_status(user_id: str, size: int = TANK_SIZE, path: str | None = None) -> dict[str, Any]:
+    """어항 상태. 관찰 기록 `size`건마다 어항 하나가 가득 차고, 가득 찬 어항은 비워지며 새 어항이 열린다.
+    기록 자체는 지우지 않는다. 가득 찬 횟수만 `completed`로 센다."""
+    with _db(path) as con:
+        rows = con.execute(
+            "SELECT species FROM aquarium_records WHERE user_id=? AND status='active' "
+            "ORDER BY observed_at ASC, id ASC", (user_id,)).fetchall()
+    total = len(rows)
+    completed, current = divmod(total, size)
+    master = species_master(path)
+    fish = [species_info(r["species"], master)["emoji"] for r in rows[total - current:]] if current else []
+    return {"size": size, "total": total, "completed": completed, "current": current, "fish": fish,
+            "to_next": size - current}
+
+
 # ---------------------------------------------------------------- 변경
 def reclassify_record(user_id: str, observation_id: int, new_species: str, path: str | None = None) -> None:
     """미확인 기록의 이름을 정하거나 다른 종으로 옮긴다(본인 기록만)."""
