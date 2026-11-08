@@ -38,3 +38,21 @@ def test_지도는_못그리면_좌표글로_대신(monkeypatch):
     monkeypatch.setattr(safe_ui, "_ARROW_OK", False)
     safe_ui.safe_map(33.5, 126.5)
     assert "33.5000" in cap.out and "126.5000" in cap.out
+
+
+def test_safe_wrappers_fallback_without_pyarrow():
+    import sys
+    from streamlit.testing.v1 import AppTest
+
+    code = (
+        "import sys\n"
+        "sys.modules['pyarrow']=None; sys.modules['pyarrow.lib']=None\n"
+        "import streamlit as st\n"
+        "from sea_info.safe_ui import safe_dataframe, safe_line_chart, safe_bar_chart\n"
+        "safe_dataframe([{'a':1,'b':'x'}])\n"
+        "safe_line_chart({'호출':[1,2,3]})\n"
+        "l, r = st.columns(2)\n"
+        "safe_bar_chart({'v':{'a':1,'b':2}}, container=r)\n"
+    )
+    at = AppTest.from_string(code).run()
+    assert not at.exception

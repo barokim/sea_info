@@ -60,3 +60,51 @@ def safe_map(lat: float, lon: float, zoom: int = 10, size: int = 2000) -> None:
         except Exception:  # noqa: BLE001
             pass
     st.caption(f"지도를 이 PC에서는 표시할 수 없어 좌표로 보여 줍니다: 위도 {lat:.4f}, 경도 {lon:.4f}")
+
+
+def _rows_of(data: Any) -> list[dict[str, Any]]:
+    """표로 그릴 수 있게 list[dict] 모양으로 바꾼다(dict of list / dict of dict 지원)."""
+    if isinstance(data, list):
+        return [dict(r) if isinstance(r, dict) else {"값": r} for r in data]
+    if isinstance(data, dict):
+        rows: list[dict[str, Any]] = []
+        for name, series in data.items():
+            if isinstance(series, dict):
+                rows += [{"항목": k, str(name): v} for k, v in series.items()]
+            else:
+                rows += [{"번호": i + 1, str(name): v} for i, v in enumerate(series)]
+        return rows
+    return []
+
+
+def safe_dataframe(data: Any, **kwargs: Any) -> None:
+    """st.dataframe. pyarrow가 막히면 HTML 표로 대신 그린다(행 선택 같은 옵션은 쓰지 않는 표 전용)."""
+    if arrow_ok():
+        st.dataframe(data, **kwargs)
+    else:
+        html_table(_rows_of(data))
+
+
+def safe_line_chart(data: Any, container: Any = None, **kwargs: Any) -> None:
+    """container(열 등)를 주면 그 안에 그린다."""
+    target = container if container is not None else st
+    if arrow_ok():
+        target.line_chart(data, **kwargs)
+    else:
+        if container is not None:
+            with container:
+                html_table(_rows_of(data))
+        else:
+            html_table(_rows_of(data))
+
+
+def safe_bar_chart(data: Any, container: Any = None, **kwargs: Any) -> None:
+    target = container if container is not None else st
+    if arrow_ok():
+        target.bar_chart(data, **kwargs)
+    else:
+        if container is not None:
+            with container:
+                html_table(_rows_of(data))
+        else:
+            html_table(_rows_of(data))

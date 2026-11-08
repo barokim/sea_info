@@ -9,6 +9,7 @@ import streamlit as st
 
 from sea_info import store
 from sea_info.imaging import prepare_image
+from sea_info.safe_ui import safe_bar_chart, safe_dataframe, safe_line_chart
 from sea_info.scr06_post_detail import open_post_detail
 
 SPECIES = [
@@ -404,7 +405,7 @@ def games() -> None:
         st.caption("획득 점수 Top 5")
         quiz_top=store.game_top("quiz")
         quiz_rows=[{"순위":i+1,"닉네임":r["user_id"],"점수":r["score"]} for i,r in enumerate(quiz_top)] or [{"순위": i+1, "닉네임": n, "점수": score} for i,(n,score) in enumerate([("바다탐험가",100),("파도소리",90),("해변산책러",80),("바다연구가",70),("푸른바다",60)])]
-        st.dataframe(quiz_rows, hide_index=True, use_container_width=True)
+        safe_dataframe(quiz_rows, hide_index=True, use_container_width=True)
         if st.button("퀴즈 시작 · SCR-11", type="primary"):
             st.session_state.quiz_open = True
             st.session_state.quiz_index = 0
@@ -414,7 +415,7 @@ def games() -> None:
         st.caption("획득 점수 Top 5")
         puzzle_top=store.game_top("puzzle")
         puzzle_rows=[{"순위":i+1,"닉네임":r["user_id"],"점수":r["score"]} for i,r in enumerate(puzzle_top)] or [{"순위": i+1, "닉네임": n, "점수": score} for i,(n,score) in enumerate([("바다별",100),("조개친구",90),("바다연구가",80),("파도소리",60),("해변산책러",50)])]
-        st.dataframe(puzzle_rows, hide_index=True, use_container_width=True)
+        safe_dataframe(puzzle_rows, hide_index=True, use_container_width=True)
         if st.button("퍼즐 시작 · SCR-12"):
             st.session_state.puzzle_open = True
             st.session_state.puzzle = ["🪸", "🐠", "🐬", "🦪"]
@@ -548,12 +549,12 @@ def dashboard() -> None:
     a,b = st.columns(2)
     with a, st.container(border=True):
         st.subheader("월별 관찰 추이")
-        st.line_chart({"관찰": [1,2,2,3,4,5]}, x_label="월", y_label="관찰 수")
+        safe_line_chart({"관찰": [1,2,2,3,4,5]}, x_label="월", y_label="관찰 수")
     with b, st.container(border=True):
         st.subheader("분류군별 수집 현황")
-        st.bar_chart({"종 수": {"어류":2,"무척추동물":3,"해조류":1}})
+        safe_bar_chart({"종 수": {"어류":2,"무척추동물":3,"해조류":1}})
     st.subheader("최근 관찰 기록")
-    st.dataframe([{k:v for k,v in post.items() if k != "photo_blob"} for post in mine], use_container_width=True, hide_index=True)
+    safe_dataframe([{k:v for k,v in post.items() if k != "photo_blob"} for post in mine], use_container_width=True, hide_index=True)
     st.progress(min(1.0, len(collections)/12), text=f"수집 진행률 {len(collections)}/12 종")
 
 
@@ -582,8 +583,8 @@ def admin_dashboard() -> None:
                 st.toast("정책을 현재 세션에 저장했습니다.")
         for c,(k,v) in zip(st.columns(4),[("성공",18),("실패",1),("한도 초과(429)",2),("캐시 적중률","42%")]): c.metric(k,v)
         l,r=st.columns(2)
-        l.line_chart({"호출": [4,7,6,10,5,8,12]})
-        r.bar_chart({"AI 추정 확신도": {"0~40%":2,"40~70%":6,"70~90%":9,"90~100%":4}})
+        safe_line_chart({"호출": [4,7,6,10,5,8,12]}, container=l)
+        safe_bar_chart({"AI 추정 확신도": {"0~40%":2,"40~70%":6,"70~90%":9,"90~100%":4}}, container=r)
         st.caption("응답 시간 1.2초 예시 · AI 전송 동의율 68% · 사진 활용 동의율 45%")
     with content:
         st.subheader("게시판 설정 · ADM-01")
@@ -614,7 +615,7 @@ def admin_dashboard() -> None:
                ("Redis",bool(cfg.get("redis_url"))),
                ("Jira",bool(cfg.get("jira_api_token") and cfg.get("jira_url"))),
                ("해양 관측 API",bool(cfg.get("marine_api_key")))]]
-        st.dataframe(rows, hide_index=True, use_container_width=True)
+        safe_dataframe(rows, hide_index=True, use_container_width=True)
         st.caption("API 키·비밀번호는 화면에 표시하지 않습니다. 운영 설정 파일과 배포 Secret에 분리합니다.")
         st.subheader("제보·건의 처리")
         reports = store.list_reports()
