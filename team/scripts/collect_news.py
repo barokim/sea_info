@@ -29,8 +29,9 @@ def main() -> int:
             if not s["feed_url"]:
                 continue
             try:
-                n = len(nc.parse_feed(nc.fetch_url(s["feed_url"])))
-                print(f"OK   {s['name']}: 기사 {n}건 파싱")
+                items = nc.parse_source(nc.fetch_url(s["feed_url"]), s["feed_url"])
+                off = "" if s["enabled"] else " (꺼짐)"
+                print(f"OK   {s['name']}{off}: 기사 {len(items)}건 파싱 · 예: {items[0]['title'][:30]}")
             except Exception as exc:
                 bad += 1
                 print(f"FAIL {s['name']}: {type(exc).__name__}: {exc}")

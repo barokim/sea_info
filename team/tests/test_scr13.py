@@ -253,3 +253,8 @@ def test_기본_출처에_새_매체_포함(ndb):
     assert "articleList.html?sc_sub_section_code=S2N9" in names["현대해양(연근해 어업)"]["feed_url"]
     assert "S2N122" in names["뉴스펭귄(우리고장 멸종위기종)"]["feed_url"]
     assert not any(s["enabled"] for s in names.values() if "RSS 중단" in s["name"])
+
+
+def test_피드_끝에_붙은_찌꺼기는_버린다():
+    items = nc.parse_feed(RSS + b"\n<script>ad()</script>\n", NOW)
+    assert len(items) == 2

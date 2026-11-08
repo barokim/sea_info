@@ -21,7 +21,7 @@ from sea_info.dbutil import KST, parse_ts
 
 MAX_BYTES = 2 * 1024 * 1024
 MAX_ITEMS_PER_SOURCE = 30
-USER_AGENT = "Sea-Info-Agent-NewsCollector/1.0"
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 Sea-Info-Agent-NewsCollector/1.0"
 SCHEDULE_HOUR = 6
 
 
@@ -32,7 +32,8 @@ class FeedError(Exception):
 def fetch_url(url: str, timeout: int = 15) -> bytes:
     if not url.startswith(("http://", "https://")):
         raise FeedError("지원하지 않는 주소입니다.")
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/rss+xml, text/xml, text/html;q=0.9, */*;q=0.5",
+                                               "Accept-Language": "ko-KR,ko;q=0.9"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
         data = resp.read(MAX_BYTES + 1)
     if len(data) > MAX_BYTES:
@@ -75,6 +76,11 @@ def parse_feed(data: bytes, now: datetime | None = None) -> list[dict[str, Any]]
     head = data[:4096].lower()
     if b"<!doctype" in head or b"<!entity" in data[:65536].lower():
         raise FeedError("DTD/ENTITY가 포함된 피드는 처리하지 않습니다.")
+    for end in (b"</rss>", b"</feed>", b"</rdf:rdf>"):  # 끝맺음 뒤에 붙은 광고·스크립트 찌꺼기는 버린다
+        pos = data.lower().rfind(end)
+        if pos != -1:
+            data = data[:pos + len(end)]
+            break
     try:
         root = ET.fromstring(data)
     except ET.ParseError as exc:
@@ -155,7 +161,13 @@ def parse_article_list(data: bytes, base_url: str, now: datetime | None = None) 
 
 def parse_source(data: bytes, url: str, now: datetime | None = None) -> list[dict[str, Any]]:
     """RSS/Atom이면 피드로, 기사목록 웹페이지면 목록으로 읽는다."""
-    return parse_article_list(data, url, now) if is_html_list(data) else parse_feed(data, now)
+    if is_html_list(data):
+        return parse_article_list(data, url, now)
+    try:
+        return parse_feed(data, now)
+    except FeedError as exc:
+        head = re.sub(r"\s+", " ", data[:160].decode("utf-8", errors="replace")).strip()
+        raise FeedError(f"{exc} [받은 내용 앞부분: {head}]") from exc
 
 
 def _summarizer_from_settings() -> Callable[[str, str], dict[str, Any]]:
