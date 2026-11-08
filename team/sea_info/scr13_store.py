@@ -19,11 +19,9 @@ SETTING_DEFAULTS = {
     "news_per_page": "10",
 }
 SOURCE_KINDS = ("공공기관", "매체", "샘플")
-# 2026-11-08 확인: 정책브리핑 RSS는 2026-07-01 제공 중단(공지)이라 뺐다. 한국수산경제 RSS·현대해양·뉴스펭귄 목록·해양생물자원관 보도자료 게시판은 브라우저에서 열림.
+# 2026-11-08 확인: 정책브리핑 RSS는 2026-07-01 제공 중단(공지)이라 뺐다. 한국수산경제 RSS는 브라우저에선 열리나 앱 접속에는 웹페이지를 돌려줘 뺐다(2026-11-08 PC 점검). 현대해양·뉴스펭귄 목록·해양생물자원관 게시판은 PC 점검 통과.
 # 매체 출처는 "이용 조건 확인함"을 운영자가 켜야 수집한다(terms_verified=0이 기본).
 DEFAULT_SOURCES = [
-    {"name": "한국수산경제(전체기사)", "kind": "매체", "feed_url": "http://www.fisheco.com/rss/allArticle.xml",
-     "enabled": 1, "terms_verified": 0},
     {"name": "현대해양(연근해 어업)", "kind": "매체",
      "feed_url": "https://www.hdhy.co.kr/news/articleList.html?sc_sub_section_code=S2N9&view_type=sm",
      "enabled": 1, "terms_verified": 0},
@@ -124,7 +122,8 @@ def ensure_schema(path: str | None = None, now: datetime | None = None) -> None:
         for src in DEFAULT_SOURCES:
             con.execute("INSERT OR IGNORE INTO news_sources(name,kind,feed_url,enabled,terms_verified) "
                         "VALUES(:name,:kind,:feed_url,:enabled,:terms_verified)", src)
-        con.execute("UPDATE news_sources SET enabled=0 WHERE feed_url='https://www.korea.kr/rss/dept_mof.xml'")  # RSS 중단(2026-07-01)
+        con.execute("UPDATE news_sources SET enabled=0 WHERE feed_url IN ('https://www.korea.kr/rss/dept_mof.xml', "
+                    "'http://www.fisheco.com/rss/allArticle.xml')")  # 정책브리핑 RSS 중단(2026-07-01), 한국수산경제는 앱 접속 불가
         if con.execute("SELECT COUNT(*) FROM news_articles").fetchone()[0] == 0:
             sample_id = con.execute("SELECT id FROM news_sources WHERE kind='샘플'").fetchone()[0]
             base = now or datetime.now(KST)

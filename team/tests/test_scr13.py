@@ -252,7 +252,7 @@ def test_기본_출처에_새_매체_포함(ndb):
     names = {s["name"]: s for s in ns.list_sources(ndb)}
     assert "articleList.html?sc_sub_section_code=S2N9" in names["현대해양(연근해 어업)"]["feed_url"]
     assert "S2N122" in names["뉴스펭귄(우리고장 멸종위기종)"]["feed_url"]
-    assert "국립해양생물자원관 보도자료" in names and not any("korea.kr" in s["feed_url"] and s["enabled"] for s in names.values())
+    assert "한국수산경제(전체기사)" not in names and "국립해양생물자원관 보도자료" in names and not any("korea.kr" in s["feed_url"] and s["enabled"] for s in names.values())
 
 
 def test_피드_끝에_붙은_찌꺼기는_버린다():
