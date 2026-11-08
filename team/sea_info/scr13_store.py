@@ -19,10 +19,13 @@ SETTING_DEFAULTS = {
     "news_per_page": "10",
 }
 SOURCE_KINDS = ("공공기관", "매체", "샘플")
-# 실제 URL은 네트워크가 열린 PC에서 `python scripts/collect_news.py --check`로 먼저 확인할 것
+# 2026-11-08 확인: 정책브리핑 RSS는 2026-07-01 제공 중단(공지). 한국수산경제 RSS는 열리고 최신 기사가 있음.
+# 매체 출처는 "이용 조건 확인함"을 운영자가 켜야 수집한다(terms_verified=0이 기본).
 DEFAULT_SOURCES = [
-    {"name": "해양수산부 보도자료(정책브리핑)", "kind": "공공기관", "feed_url": "https://www.korea.kr/rss/dept_mof.xml",
-     "enabled": 1, "terms_verified": 1},
+    {"name": "한국수산경제(전체기사)", "kind": "매체", "feed_url": "http://www.fisheco.com/rss/allArticle.xml",
+     "enabled": 1, "terms_verified": 0},
+    {"name": "해양수산부 보도자료(정책브리핑·RSS 중단)", "kind": "공공기관", "feed_url": "https://www.korea.kr/rss/dept_mof.xml",
+     "enabled": 0, "terms_verified": 1},
     {"name": "Sea-Info 편집팀(샘플)", "kind": "샘플", "feed_url": "", "enabled": 0, "terms_verified": 1},
 ]
 SAMPLE_ARTICLES = [

@@ -25,6 +25,15 @@ def ndb(tmp_path):
     return p
 
 
+@pytest.fixture
+def cdb(ndb):
+    """수집 시험용: 매체 출처의 '이용 조건 확인함'을 켠 상태."""
+    for s in ns.list_sources(ndb):
+        if s["kind"] == "매체":
+            ns.update_source(s["id"], True, terms_verified=True, path=ndb)
+    return ndb
+
+
 def test_샘플_시드와_목록_검색_페이지(ndb):
     items, total = ns.list_articles(path=ndb, per_page=3)
     assert total == 8 and len(items) == 3 and items[0]["source_name"].startswith("Sea-Info")
@@ -115,31 +124,35 @@ def test_위험한_XML은_거부(ndb):
         nc.parse_feed(b"<rss><oops>", NOW)
 
 
-def test_수집_성공_중복_방지(ndb):
-    src = ns.collectable_sources(ndb)[0]
-    r = nc.collect_source(src, fetch=lambda u: RSS, now=NOW, path=ndb)
+def test_매체_출처는_이용조건_확인_전에는_수집하지_않는다(ndb):
+    assert ns.collectable_sources(ndb) == []
+
+
+def test_수집_성공_중복_방지(cdb):
+    src = ns.collectable_sources(cdb)[0]
+    r = nc.collect_source(src, fetch=lambda u: RSS, now=NOW, path=cdb)
     assert r == {"source": src["name"], "status": "성공", "fetched": 2, "inserted": 2}
-    again = nc.collect_source(src, fetch=lambda u: RSS, now=NOW, path=ndb)
+    again = nc.collect_source(src, fetch=lambda u: RSS, now=NOW, path=cdb)
     assert again["inserted"] == 0  # URL 기준 중복 제외
-    art = [a for a in ns.list_articles(path=ndb, per_page=50)[0] if a["url"] == "https://example.test/a1"][0]
+    art = [a for a in ns.list_articles(path=cdb, per_page=50)[0] if a["url"] == "https://example.test/a1"][0]
     assert art["summary"] and art["summary_detail"] and art["ai_summarized"] == 0  # mock이면 발췌 요약
 
 
-def test_수집_실패시_기존_콘텐츠_유지와_실패상태_기록_재처리(ndb):
-    src = ns.collectable_sources(ndb)[0]
-    nc.collect_source(src, fetch=lambda u: RSS, now=NOW, path=ndb)
-    before = ns.list_articles(path=ndb, per_page=50)[1]
+def test_수집_실패시_기존_콘텐츠_유지와_실패상태_기록_재처리(cdb):
+    src = ns.collectable_sources(cdb)[0]
+    nc.collect_source(src, fetch=lambda u: RSS, now=NOW, path=cdb)
+    before = ns.list_articles(path=cdb, per_page=50)[1]
 
     def boom(url):
         raise TimeoutError("시간 초과")
-    r = nc.collect_source(src, fetch=boom, now=NOW, path=ndb)
+    r = nc.collect_source(src, fetch=boom, now=NOW, path=cdb)
     assert r["status"] == "실패"
-    assert ns.list_articles(path=ndb, per_page=50)[1] == before
-    st = [s for s in ns.list_sources(ndb) if s["id"] == src["id"]][0]
+    assert ns.list_articles(path=cdb, per_page=50)[1] == before
+    st = [s for s in ns.list_sources(cdb) if s["id"] == src["id"]][0]
     assert st["last_status"] == "실패" and "시간 초과" in st["last_error"] and st["consecutive_failures"] == 1
-    out = nc.run_collection(trigger="retry", source_id=src["id"], fetch=lambda u: RSS, now=NOW, path=ndb)
+    out = nc.run_collection(trigger="retry", source_id=src["id"], fetch=lambda u: RSS, now=NOW, path=cdb)
     assert out[0]["status"] == "성공"
-    st = [s for s in ns.list_sources(ndb) if s["id"] == src["id"]][0]
+    st = [s for s in ns.list_sources(cdb) if s["id"] == src["id"]][0]
     assert st["last_status"] == "성공" and st["consecutive_failures"] == 0 and st["last_error"] is None
 
 
@@ -153,15 +166,15 @@ def test_이용조건_미확인_매체와_샘플은_수집하지_않는다(ndb):
         ns.add_source("x", "매체", "ftp://bad", True, path=ndb)
 
 
-def test_매일_6시_기준_수집_시점(ndb):
+def test_매일_6시_기준_수집_시점(cdb):
     d = lambda h, day=8: datetime(2026, 11, day, h, 0, tzinfo=KST)  # noqa: E731
     assert nc.due_since(d(5)) == d(6, 7) and nc.due_since(d(7)) == d(6)
-    assert nc.is_due(d(7), ndb) is True  # 아직 한 번도 안 돌았음
-    assert nc.collect_if_due(enabled=False, now=d(7), path=ndb) is False
-    ran = nc.collect_if_due(enabled=True, now=d(7), background=False, path=ndb, fetch=lambda u: RSS)
+    assert nc.is_due(d(7), cdb) is True  # 아직 한 번도 안 돌았음
+    assert nc.collect_if_due(enabled=False, now=d(7), path=cdb) is False
+    ran = nc.collect_if_due(enabled=True, now=d(7), background=False, path=cdb, fetch=lambda u: RSS)
     assert ran is True
-    assert nc.collect_if_due(enabled=True, now=d(9), background=False, path=ndb, fetch=lambda u: RSS) is False  # 오늘은 이미 시도
-    assert nc.collect_if_due(enabled=True, now=d(7, 9), background=False, path=ndb, fetch=lambda u: RSS) is True  # 다음날
+    assert nc.collect_if_due(enabled=True, now=d(9), background=False, path=cdb, fetch=lambda u: RSS) is False  # 오늘은 이미 시도
+    assert nc.collect_if_due(enabled=True, now=d(7, 9), background=False, path=cdb, fetch=lambda u: RSS) is True  # 다음날
 
 
 def test_AI요약_성공과_실패시_발췌로_대체():
