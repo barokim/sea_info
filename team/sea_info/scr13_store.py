@@ -19,7 +19,7 @@ SETTING_DEFAULTS = {
     "news_per_page": "10",
 }
 SOURCE_KINDS = ("공공기관", "매체", "샘플")
-# 2026-11-08 확인: 정책브리핑 RSS는 2026-07-01 제공 중단(공지). 한국수산경제 RSS는 열리고 최신 기사가 있음.
+# 2026-11-08 확인: 정책브리핑 RSS는 2026-07-01 제공 중단(공지)이라 뺐다. 한국수산경제 RSS·현대해양·뉴스펭귄 목록·해양생물자원관 보도자료 게시판은 브라우저에서 열림.
 # 매체 출처는 "이용 조건 확인함"을 운영자가 켜야 수집한다(terms_verified=0이 기본).
 DEFAULT_SOURCES = [
     {"name": "한국수산경제(전체기사)", "kind": "매체", "feed_url": "http://www.fisheco.com/rss/allArticle.xml",
@@ -30,8 +30,8 @@ DEFAULT_SOURCES = [
     {"name": "뉴스펭귄(우리고장 멸종위기종)", "kind": "매체",
      "feed_url": "https://www.newspenguin.com/news/articleList.html?sc_sub_section_code=S2N122&view_type=sm",
      "enabled": 1, "terms_verified": 0},
-    {"name": "해양수산부 보도자료(정책브리핑·RSS 중단)", "kind": "공공기관", "feed_url": "https://www.korea.kr/rss/dept_mof.xml",
-     "enabled": 0, "terms_verified": 1},
+    {"name": "국립해양생물자원관 보도자료", "kind": "공공기관",
+     "feed_url": "https://www.mabik.re.kr/bbs/BBSMSTR_000000000347.do", "enabled": 1, "terms_verified": 1},
     {"name": "Sea-Info 편집팀(샘플)", "kind": "샘플", "feed_url": "", "enabled": 0, "terms_verified": 1},
 ]
 SAMPLE_ARTICLES = [

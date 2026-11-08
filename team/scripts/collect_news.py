@@ -26,7 +26,7 @@ def main() -> int:
     if args.check:
         bad = 0
         for s in ns.list_sources():
-            if not s["feed_url"]:
+            if not s["feed_url"] or not s["enabled"]:
                 continue
             try:
                 items = nc.parse_source(nc.fetch_url(s["feed_url"]), s["feed_url"])

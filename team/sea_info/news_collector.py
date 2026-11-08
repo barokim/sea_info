@@ -159,8 +159,38 @@ def parse_article_list(data: bytes, base_url: str, now: datetime | None = None) 
     return items[:MAX_ITEMS_PER_SOURCE]
 
 
+def is_mabik_board(data: bytes) -> bool:
+    return b"fn_search_detail(" in data
+
+
+def parse_mabik_board(data: bytes, base_url: str, now: datetime | None = None) -> list[dict[str, Any]]:
+    """국립해양생물자원관 보도자료 게시판(표). 제목 버튼의 글 번호로 상세 주소를 만든다. 요약이 없어 제목을 본문으로 쓴다."""
+    now = now or datetime.now(KST)
+    page = data.decode("utf-8", errors="replace")
+    root = re.sub(r"(?:/view)?\.do(?:\?.*)?$", "", base_url)
+    items = []
+    for row in re.findall(r"(?is)<tr\b[^>]*>(.*?)</tr>", page):
+        m = re.search(r"fn_search_detail\(\s*'([^']+)'", row)
+        t = re.search(r"(?is)<strong[^>]*bbs-subject-txt[^>]*>(.*?)</strong>", row)
+        if not (m and t and strip_html(t.group(1))):
+            continue
+        title = strip_html(t.group(1))
+        d = re.search(r"(\d{4})[.\-](\d{2})[.\-](\d{2})", strip_html(re.sub(r"(?is)^.*?class=\"regDate\"", "", row)))
+        try:
+            when = datetime(*map(int, d.groups()), tzinfo=KST) if d else now
+        except ValueError:
+            when = now
+        items.append({"title": title[:200], "url": f"{root}/view.do?nttId={m.group(1)}", "text": title,
+                      "published_at": when.isoformat()})
+    if not items:
+        raise FeedError("게시판 목록을 찾지 못했습니다(화면 구조가 바뀌었을 수 있습니다).")
+    return items[:MAX_ITEMS_PER_SOURCE]
+
+
 def parse_source(data: bytes, url: str, now: datetime | None = None) -> list[dict[str, Any]]:
     """RSS/Atom이면 피드로, 기사목록 웹페이지면 목록으로 읽는다."""
+    if is_mabik_board(data):
+        return parse_mabik_board(data, url, now)
     if is_html_list(data):
         return parse_article_list(data, url, now)
     try:

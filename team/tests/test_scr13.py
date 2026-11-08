@@ -125,7 +125,7 @@ def test_위험한_XML은_거부(ndb):
 
 
 def test_매체_출처는_이용조건_확인_전에는_수집하지_않는다(ndb):
-    assert ns.collectable_sources(ndb) == []
+    assert [x["name"] for x in ns.collectable_sources(ndb)] == ["국립해양생물자원관 보도자료"]  # 공공기관만 바로 수집
 
 
 def test_수집_성공_중복_방지(cdb):
@@ -252,9 +252,26 @@ def test_기본_출처에_새_매체_포함(ndb):
     names = {s["name"]: s for s in ns.list_sources(ndb)}
     assert "articleList.html?sc_sub_section_code=S2N9" in names["현대해양(연근해 어업)"]["feed_url"]
     assert "S2N122" in names["뉴스펭귄(우리고장 멸종위기종)"]["feed_url"]
-    assert not any(s["enabled"] for s in names.values() if "RSS 중단" in s["name"])
+    assert "국립해양생물자원관 보도자료" in names and not any("korea.kr" in s["feed_url"] and s["enabled"] for s in names.values())
 
 
 def test_피드_끝에_붙은_찌꺼기는_버린다():
     items = nc.parse_feed(RSS + b"\n<script>ad()</script>\n", NOW)
     assert len(items) == 2
+
+
+MABIK_BOARD = """<html><body><table><tbody>
+<tr> <td class="atchFileId"><span class="tds">970</span></td> <td class="subject"><span class="tds">
+<button onclick="fn_search_detail('B000000015215Tu2hP1'); return false;" class="link"><div class="bbs-subject-con">
+<strong class="bbs-subject-txt">국립해양생물자원관, 추석연휴 문화행사 선보여</strong></div></button></span></td>
+<td class="writer"><span class="tds">대외협력실</span></td><td class="hit"><span class="tds"> 310 </span></td>
+<td class="regDate"><span class="add-head">등록일</span><span class="tds"> 2026-09-23 </span></td></tr>
+<tr><td>머리글 행</td></tr></tbody></table></body></html>""".encode()
+
+
+def test_해양생물자원관_게시판_읽기():
+    url = "https://www.mabik.re.kr/bbs/BBSMSTR_000000000347.do"
+    items = nc.parse_source(MABIK_BOARD, url, NOW)
+    assert items == [{"title": "국립해양생물자원관, 추석연휴 문화행사 선보여",
+                      "url": "https://www.mabik.re.kr/bbs/BBSMSTR_000000000347/view.do?nttId=B000000015215Tu2hP1",
+                      "text": "국립해양생물자원관, 추석연휴 문화행사 선보여", "published_at": "2026-09-23T00:00:00+09:00"}]
