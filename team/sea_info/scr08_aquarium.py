@@ -14,6 +14,7 @@ from PIL import Image
 
 from sea_info import bootstrap, scr06_store, scr08_store as aq, store
 from sea_info.dbutil import format_ts
+from sea_info.safe_ui import arrow_ok, html_table
 from sea_info.scr06_post_detail import open_post_detail
 
 
@@ -106,6 +107,16 @@ def _render_table(user: str, search: str) -> None:
               "이름": f"{r['emoji']} {r['species']}", "사용자": _public_name(user),
               "관찰됨": format_ts(r["observed_at"])[:10], "장소": r["region"],
               "업로드 날짜": format_ts(r["added_at"])[:10]} for r in shown]
+    if not arrow_ok():  # pyarrow가 막힌 PC: 표는 HTML로, 행 선택은 아래 선택칸으로
+        html_table(frame, image_cols=("사진",), height=min(640, 60 + 56 * len(frame)))
+        if len(records) > len(shown):
+            st.caption(f"최신 {len(shown)}건만 보여 줍니다. 이름 검색으로 좁혀 보세요.")
+        names = list(dict.fromkeys(r["species"] for r in shown))
+        pick = st.selectbox("도감 상세로 볼 생물", names, index=None, placeholder="생물을 고르세요", key="aq_table_pick")
+        if pick and st.button(f"{pick} 도감 상세 보기 · SCR-09", key="aq_table_open2"):
+            st.session_state["aquarium_species"] = pick
+            st.rerun()
+        return
     event = st.dataframe(
         frame, hide_index=True, width="stretch", on_select="rerun", selection_mode="single-row",
         key="aq_table", row_height=56, height=min(640, 40 + 56 * len(frame)),

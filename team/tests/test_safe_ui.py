@@ -1,0 +1,40 @@
+"""pyarrow가 막힌 PC(Windows 앱 제어 정책)에서도 쓰는 표 도우미 시험."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from sea_info import safe_ui  # noqa: E402
+
+
+class _Capture:
+    def __init__(self):
+        self.out = ""
+
+    def markdown(self, text, unsafe_allow_html=False):
+        self.out += text
+
+
+def test_html_table_글자는_이스케이프하고_그림은_data주소만(monkeypatch):
+    cap = _Capture()
+    monkeypatch.setattr(safe_ui, "st", cap)
+    safe_ui.html_table([{"사진": "data:image/jpeg;base64,AAAA", "이름": "<script>x</script>", "장소": None},
+                        {"사진": "http://evil.test/x.png", "이름": "소라게", "장소": "제주"}], image_cols=("사진",))
+    assert "<script>" not in cap.out and "&lt;script&gt;" in cap.out
+    assert cap.out.count("<img") == 1 and "evil.test" in cap.out and "<img src='http://evil" not in cap.out
+
+
+def test_pyarrow가_막히면_arrow_ok는_False(monkeypatch):
+    monkeypatch.setitem(sys.modules, "pyarrow", None)
+    monkeypatch.setitem(sys.modules, "pyarrow.lib", None)
+    monkeypatch.setattr(safe_ui, "_ARROW_OK", None)
+    assert safe_ui.arrow_ok() is False
+
+
+def test_지도는_못그리면_좌표글로_대신(monkeypatch):
+    cap = _Capture()
+    cap.caption = lambda t: setattr(cap, "out", t)
+    monkeypatch.setattr(safe_ui, "st", cap)
+    monkeypatch.setattr(safe_ui, "_ARROW_OK", False)
+    safe_ui.safe_map(33.5, 126.5)
+    assert "33.5000" in cap.out and "126.5000" in cap.out

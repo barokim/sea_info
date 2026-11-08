@@ -8,6 +8,7 @@ import streamlit as st
 
 from sea_info import bootstrap, news_collector as nc, scr13_store as ns
 from sea_info.dbutil import format_ts
+from sea_info.safe_ui import arrow_ok, html_table
 
 
 def _identity() -> tuple[str, str]:
@@ -150,9 +151,13 @@ def _render_admin(user: str) -> None:
             _admin_settings()
         with t4:
             runs = ns.recent_runs()
-            st.dataframe([{"시각": format_ts(r["started_at"]), "출처": r["source_name"], "실행": r["trigger"],
-                           "결과": r["status"], "가져옴": r["fetched"], "새 기사": r["inserted"], "오류": r["error"] or ""}
-                          for r in runs], hide_index=True, width="stretch")
+            rows = [{"시각": format_ts(r["started_at"]), "출처": r["source_name"], "실행": r["trigger"],
+                     "결과": r["status"], "가져옴": r["fetched"], "새 기사": r["inserted"], "오류": r["error"] or ""}
+                    for r in runs]
+            if arrow_ok():
+                st.dataframe(rows, hide_index=True, width="stretch")
+            else:
+                html_table(rows, height=420)
 
 
 def _admin_articles() -> None:

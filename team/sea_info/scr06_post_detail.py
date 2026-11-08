@@ -17,6 +17,7 @@ import streamlit as st
 
 from sea_info import bootstrap, scr06_store as s6, scr08_store, store
 from sea_info.dbutil import format_ts
+from sea_info.safe_ui import safe_map
 
 DETAIL_PAGE = "pages/post_detail.py"
 DEFAULT_RETURN = {"page": "pages/community.py", "label": "커뮤니티", "state": {}}
@@ -153,7 +154,7 @@ def _render_location(post: dict[str, Any], user: str, role: str) -> None:
         return
     st.markdown(f"##### 📍 관찰 위치 · {loc['label']}")
     if loc["lat"] is not None:
-        st.map({"lat": [loc["lat"]], "lon": [loc["lon"]]}, zoom=8 if loc["precision"] == "approx" else 10, size=2000)
+        safe_map(loc["lat"], loc["lon"], zoom=8 if loc["precision"] == "approx" else 10, size=2000)
     if loc["note"]:
         st.caption(loc["note"])
 
