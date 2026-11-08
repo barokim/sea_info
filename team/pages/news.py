@@ -1,2 +1,2 @@
-from sea_info.screens import news
-news()
+from sea_info.scr13_news import render
+render()

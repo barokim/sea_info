@@ -9,6 +9,7 @@ import streamlit as st
 
 from sea_info import store
 from sea_info.imaging import prepare_image
+from sea_info.scr06_post_detail import open_post_detail
 
 SPECIES = [
     {"name": "흰동가리", "scientific": "Amphiprion ocellaris", "emoji": "🐠", "habitat": "따뜻한 열대 바다의 산호초 주변", "diet": "작은 갑각류와 플랑크톤", "summary": "말미잘과 공생하며 산호초 생태계에서 살아갑니다.", "confidence": .91},
@@ -53,7 +54,7 @@ def home() -> None:
             st.write("사진을 찍거나 앨범에서 골라 바다 생물을 알아보세요.")
             st.page_link("pages/explore.py", label="사진으로 생물 알아보기", icon="🔎")
         st.subheader("다른 사용자의 최근 생물 관찰")
-        public_posts = [p for p in store.observations() if p["is_public"]]
+        public_posts = [p for p in store.observations() if p["is_public"] and not p.get("is_hidden")]
         for post in public_posts[:3]:
             with st.container(border=True):
                 a, b = st.columns([3, 1])
@@ -61,6 +62,8 @@ def home() -> None:
                 location = post["region"] if post["location_visibility"] != "비공개" else "위치 비공개"
                 a.caption(f"{post['species']} · {post['author']} · {location}")
                 b.metric("♡", post["likes"])
+        if b.button("자세히", key=f"home_open_{post['id']}"):
+            open_post_detail(post["id"], "pages/home.py", "홈", keep_keys=())
         c1, c2 = st.columns(2)
         with c1, st.container(border=True):
             st.subheader("🐠 나의 수족관")
@@ -275,6 +278,7 @@ def community() -> None:
     all_posts = store.observations()
     role, user = identity()
     posts = [p for p in all_posts if (p["is_public"] or p["author"] == user or role == "admin") and
+             (not p.get("is_hidden") or p["author"] == user or role == "admin") and
              (selected_tab == "관찰 모음" or p["board_type"] == selected_tab)]
     if not posts:
         st.info(f"{selected_tab} 게시판에 공개된 기록이 없습니다.")
@@ -293,6 +297,8 @@ def community() -> None:
             st.caption(f"{post['species']} · {post['author']} · {location} · {post['created_at'][:10]}")
             st.write(post["body"])
             st.caption(f"위치 공개: {post['location_visibility']} · ♡ {post['likes']}")
+            if st.button("자세히 보기 · SCR-06", key=f"open_{post['id']}"):
+                open_post_detail(post["id"])
             with st.expander(f"작성자 공개 프로필 · SCR-07 ({post['author']})"):
                 public_by_author = [p for p in all_posts if p["author"] == post["author"] and p["is_public"]]
                 st.write(f"공개 관찰 {len(public_by_author)}건 · 관찰 생물 {len({p['species'] for p in public_by_author})}종")

@@ -34,3 +34,6 @@ redis_enabled = false
 jira_enabled = false
 news_enabled = false
 marine_api_enabled = false
+
+[moderation]
+hide_threshold = 3

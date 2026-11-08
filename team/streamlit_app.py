@@ -19,6 +19,9 @@ with st.sidebar:
             st.rerun()
     st.caption(f"실행 환경: {settings['app']['environment']} · {'샘플 데이터' if settings['app']['demo_mode'] else '실서비스 설정'}")
 
+from sea_info import bootstrap
+bootstrap.ensure_once()
+
 pages = [
     st.Page('pages/home.py', title='홈', icon='🏠', default=True),
     st.Page('pages/explore.py', title='AI 생물 탐구', icon='🔎'),
@@ -29,6 +32,7 @@ pages = [
     st.Page('pages/reports.py', title='제보 & 건의', icon='📣'),
     st.Page('pages/dashboard.py', title='마이 대시보드', icon='📊'),
     st.Page('pages/profile.py', title='내 정보', icon='⚙️'),
+    st.Page('pages/post_detail.py', title='관찰 상세', icon='🔍'),
 ]
 if st.session_state.role == 'guest':
     pages.append(st.Page('pages/login.py', title='로그인 · 회원가입', icon='👤'))
